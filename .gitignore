@@ -1,0 +1,19 @@
+# Secrets & OAuth artifacts — never commit these
+client_secret.json
+token.json
+drive_token.json
+.env
+
+# Local working/output directory
+output/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# OS cruft
+.DS_Store
+Thumbs.db

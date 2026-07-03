@@ -1,0 +1,62 @@
+name: Publish horror short
+
+on:
+  schedule:
+    - cron: "0 14 * * *"   # once/day, 14:00 UTC — adjust to taste
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      # Never echo these values — printing the file paths is fine, printing
+      # their contents is not.
+      - name: Write OAuth token files from secrets
+        run: |
+          printf '%s' "$YOUTUBE_TOKEN_JSON" > token.json
+          printf '%s' "$GOOGLE_DRIVE_TOKEN_JSON" > drive_token.json
+        env:
+          YOUTUBE_TOKEN_JSON: ${{ secrets.YOUTUBE_TOKEN_JSON }}
+          GOOGLE_DRIVE_TOKEN_JSON: ${{ secrets.GOOGLE_DRIVE_TOKEN_JSON }}
+
+      - name: Run pipeline
+        run: python src/pipeline.py
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Commit updated history
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add state/history.json
+          git diff --cached --quiet || git commit -m "chore: update story history [skip ci]"
+          git push
+
+      - name: Upload output/ as workflow artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-output
+          path: output/
+          if-no-files-found: ignore
+          retention-days: 14
