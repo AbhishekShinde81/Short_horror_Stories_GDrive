@@ -15,6 +15,8 @@ import requests
 POLLINATIONS_BASE_URL = "https://image.pollinations.ai/prompt"
 REQUEST_DELAY_SEC = 16
 REQUEST_TIMEOUT_SEC = 90
+MAX_ATTEMPTS = 3
+RETRY_BACKOFF_SEC = 20
 
 
 def _generate_one(prompt: str, width: int, height: int, model: str, seed: int) -> bytes:
@@ -27,9 +29,26 @@ def _generate_one(prompt: str, width: int, height: int, model: str, seed: int) -
         "seed": seed,
         "nologo": "true",
     }
-    response = requests.get(url, params=params, timeout=REQUEST_TIMEOUT_SEC)
-    response.raise_for_status()
-    return response.content
+
+    last_exc: Exception | None = None
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            response = requests.get(url, params=params, timeout=REQUEST_TIMEOUT_SEC)
+            response.raise_for_status()
+            return response.content
+        except requests.exceptions.HTTPError as exc:
+            # A 4xx (bad prompt/params) won't fix itself on retry -- fail immediately.
+            if exc.response is not None and exc.response.status_code < 500:
+                raise
+            last_exc = exc
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+            last_exc = exc
+
+        if attempt < MAX_ATTEMPTS:
+            print(f"image_gen: attempt {attempt}/{MAX_ATTEMPTS} failed ({last_exc}); retrying in {RETRY_BACKOFF_SEC}s")
+            time.sleep(RETRY_BACKOFF_SEC)
+
+    raise RuntimeError(f"image_gen: Pollinations request failed after {MAX_ATTEMPTS} attempts: {last_exc}") from last_exc
 
 
 def run(config: dict, story: dict, output_dir: Path) -> dict:
