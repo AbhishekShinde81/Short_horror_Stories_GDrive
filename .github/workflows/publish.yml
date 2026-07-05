@@ -42,6 +42,9 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Only used if audio_mixer.music_source is set to the experimental,
+          # non-commercial "musicgen_experimental_nc" option — see config.yaml.
+          HF_API_TOKEN: ${{ secrets.HF_API_TOKEN }}
 
       - name: Commit updated history
         if: always()

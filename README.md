@@ -94,6 +94,24 @@ run:
   publish_mode: "review"   # "review" = unlisted, "public" = public
 ```
 
+## Music: user-supplied vs. AI-generated (experimental, non-commercial)
+
+`config.yaml -> audio_mixer.music_source` has two options:
+
+- **`"user_supplied"` (default)** — picks a random track from `assets/music/`.
+  This is the only option with a clean, verifiable commercial license, and is
+  required for anything you intend to publish to a real/monetized channel.
+- **`"musicgen_experimental_nc"`** — generates a clip via Hugging Face's free
+  Inference API (`facebook/musicgen-small`), using the prompt in
+  `audio_mixer.musicgen.prompt`. **Meta's MusicGen model weights are licensed
+  CC-BY-NC 4.0 (non-commercial), and that restriction covers the generated
+  audio itself, not just the code.** This option exists purely so you can
+  preview the pipeline end-to-end without sourcing a track first — do not
+  enable it for a channel you intend to monetize or publish publicly at scale.
+  Requires a free Hugging Face account + access token
+  ([huggingface.co/settings/tokens](https://huggingface.co/settings/tokens))
+  set as `HF_API_TOKEN` (env var locally, GitHub secret in CI).
+
 ## Anti-flagging / "doesn't look like a spam bot" features
 
 - Rotating narrator persona (name, tone, signoff) and rotating visual style,

@@ -38,11 +38,27 @@ def run(config: dict, story: dict, output_dir: Path) -> dict:
     narration_path = Path(story["narration_audio_path"])
     duration = story["narration_duration_sec"]
 
-    music_path = _pick_random_asset(MUSIC_DIR)
-    if music_path is None:
-        raise RuntimeError(
-            f"audio_mixer: no music files found in {MUSIC_DIR}. "
-            "Add at least one royalty-free track (.mp3/.wav/.m4a/.ogg) before running the pipeline."
+    music_source = mixer_cfg.get("music_source", "user_supplied")
+    if music_source == "musicgen_experimental_nc":
+        import music_gen
+
+        musicgen_cfg = mixer_cfg["musicgen"]
+        music_path = music_gen.generate(
+            prompt=musicgen_cfg["prompt"],
+            model=musicgen_cfg["model"],
+            out_path=output_dir / "audio" / "musicgen_track.wav",
+        )
+    elif music_source == "user_supplied":
+        music_path = _pick_random_asset(MUSIC_DIR)
+        if music_path is None:
+            raise RuntimeError(
+                f"audio_mixer: no music files found in {MUSIC_DIR}. "
+                "Add at least one royalty-free track (.mp3/.wav/.m4a/.ogg) before running the pipeline."
+            )
+    else:
+        raise ValueError(
+            f"audio_mixer: unknown audio_mixer.music_source {music_source!r} "
+            "(expected 'user_supplied' or 'musicgen_experimental_nc')"
         )
     sfx_path = _pick_random_asset(SFX_DIR)
 
