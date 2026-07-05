@@ -14,7 +14,7 @@ run:
   history_window: 25                # how many past premises/twists to show the LLM to avoid repeats
 
 llm:
-  provider: "gemini"                # "gemini" | "anthropic"
+  provider: "anthropic"             # "gemini" | "anthropic" — temporarily on anthropic; Gemini free-tier key hit a 403 (see project notes)
   gemini:
     model: "gemini-2.5-flash"       # verify at aistudio.google.com/models before relying on this long-term
   anthropic:
