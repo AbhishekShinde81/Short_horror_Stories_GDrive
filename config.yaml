@@ -83,7 +83,7 @@ human_touch:
   write_pinned_comment_draft: true  # NOT auto-posted — see README
 
 drive:
-  folder_id: "REPLACE_WITH_YOUR_DRIVE_FOLDER_ID"
+  folder_id: "1_nCdIqF9_u6fnDxjvoeIthFt47qrK_20"
 
 youtube:
   category_id: "24"                 # Entertainment
