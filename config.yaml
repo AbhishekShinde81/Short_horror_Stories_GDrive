@@ -62,7 +62,7 @@ audio_mixer:
   sfx_volume_db: -14
   duck_db: -18                      # how much music ducks while narration plays
   fade_out_sec: 2.0
-  music_source: "user_supplied"     # "user_supplied" | "musicgen_experimental_nc"
+  music_source: "musicgen_experimental_nc"     # "user_supplied" | "musicgen_experimental_nc"
   # "user_supplied": picks a random track from assets/music/ (clean, verifiable
   #   commercial license — required for the "drive"/"youtube" review-and-publish path).
   # "musicgen_experimental_nc": generates a clip via Hugging Face's free
