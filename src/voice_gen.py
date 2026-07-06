@@ -17,7 +17,10 @@ TICKS_PER_SECOND = 1e7  # edge-tts reports offset/duration in 100-nanosecond tic
 async def _synthesize(text: str, voice: str, rate: str, pitch: str, audio_path: Path) -> list[dict]:
     import edge_tts
 
-    communicate = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch)
+    # boundary="WordBoundary" is required explicitly on edge-tts >= 7.1 --
+    # it now defaults to sentence-level boundaries, which would silently
+    # starve the per-word caption timing this pipeline depends on.
+    communicate = edge_tts.Communicate(text, voice, rate=rate, pitch=pitch, boundary="WordBoundary")
     words: list[dict] = []
     with open(audio_path, "wb") as audio_file:
         async for chunk in communicate.stream():
