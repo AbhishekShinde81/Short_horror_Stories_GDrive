@@ -1,5 +1,8 @@
 {
-  "last_persona_index": -1,
-  "last_style_index": -1,
-  "premises": []
+  "last_persona_index": 0,
+  "last_style_index": 0,
+  "premises": [
+    "A clerk repeatedly checks in a guest who turns out to be his own past self, revealing he's dead."
+  ],
+  "last_music_keyword_index": 0
 }
