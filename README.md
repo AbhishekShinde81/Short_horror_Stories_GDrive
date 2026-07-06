@@ -31,10 +31,11 @@ Do these in order.
 | 5 | OAuth 2.0 Client (**Desktop app** type) -> `client_secret.json` | Yes | same Cloud project, Credentials page |
 | 6 | One-time local OAuth authorization -> `token.json` (YouTube) and/or `drive_token.json` (Drive) | Yes | run each uploader's `--authorize` flag locally (see below) |
 | 7 | GitHub account + new repo | Yes | for code + Actions scheduling |
-| 8 | GitHub repo secrets: `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` (optional), `YOUTUBE_TOKEN_JSON`, `GOOGLE_DRIVE_TOKEN_JSON` | Yes | repo Settings -> Secrets and variables -> Actions |
+| 8 | GitHub repo secrets: `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` (optional), `YOUTUBE_TOKEN_JSON`, `GOOGLE_DRIVE_TOKEN_JSON`, `FREESOUND_API_KEY` | Yes | repo Settings -> Secrets and variables -> Actions |
 | 9 | ffmpeg | Yes | installed on the GitHub Actions runner via `apt`; install locally too for local testing |
 | 10 | Pollinations.ai (image gen) | Yes, no key needed | called directly, no signup |
 | 11 | edge-tts (voice gen) | Yes, no key needed | Python package, uses Microsoft Edge's TTS endpoint |
+| 12 | `FREESOUND_API_KEY` (SFX gen, default) | Yes, free forever | [freesound.org/apiv2/apply](https://freesound.org/apiv2/apply/) — needs a free Freesound account first |
 
 > **Anthropic billing note:** `ANTHROPIC_API_KEY` usage is billed separately
 > through the Anthropic API/Console. A Claude.ai / Claude Pro subscription
@@ -58,7 +59,11 @@ Do these in order.
    python src/youtube_uploader.py --authorize   # -> token.json
    ```
    Each opens a browser consent screen and writes a token file to the repo root.
-5. **Add royalty-free assets** to `assets/music/` (at least one track) and optionally `assets/sfx/` — the pipeline picks one of each per run. These are not downloaded or generated for you; source your own licensed audio.
+5. **Add at least one royalty-free track** to `assets/music/` — the pipeline
+   picks one per run, and this is not downloaded or generated for you (see
+   "Music" below for why). SFX defaults to auto-sourcing from Freesound
+   instead (see "SFX" below), so `assets/sfx/` is only needed if you set
+   `audio_mixer.sfx_source: "user_supplied"`.
 6. **Set `drive.folder_id`** in `config.yaml` to the target Drive folder's ID (from its URL).
 7. **Create a new GitHub repo**, push this code, and add the repo secrets listed in row 8 of the table above — paste the full contents of `token.json` / `drive_token.json` as the secret values.
 8. The workflow in `.github/workflows/publish.yml` runs once/day and on manual dispatch (`workflow_dispatch`).
@@ -68,6 +73,7 @@ Do these in order.
 ```
 pip install -r requirements.txt
 export GEMINI_API_KEY=...          # or set ANTHROPIC_API_KEY if using that provider
+export FREESOUND_API_KEY=...       # only if audio_mixer.sfx_source is "freesound" (default)
 python src/pipeline.py
 ```
 
@@ -116,6 +122,25 @@ run:
   [pollinations/pollinations#8741](https://github.com/pollinations/pollinations/issues/8741),
   an open licensing question with no response. Not wired in for either reason.)
 
+## SFX: Freesound-sourced (default) vs. user-supplied
+
+`config.yaml -> audio_mixer.sfx_source` has two options:
+
+- **`"freesound"` (default)** — `director_agent` writes a short, literal
+  `sfx_keyword` per scene (e.g. "door creak", "distant thunder"), and
+  `freesound_sfx.py` searches [Freesound.org](https://freesound.org)'s free
+  API for a **CC0-licensed** ("Creative Commons 0") match, downloads it, and
+  overlays it at that scene's start time. CC0 has no attribution requirement
+  and no commercial-use ambiguity — unlike the CC-BY-NC dead end investigated
+  for music above — so this is safe for a monetized/public channel. Results
+  are cached in `state/sfx_cache/` by keyword so repeat keywords don't re-hit
+  the API. A scene whose keyword returns no CC0 match is skipped (logged as a
+  warning), not a hard failure. Requires a free `FREESOUND_API_KEY` (see
+  setup table above).
+- **`"user_supplied"`** — the original behavior: picks one random track from
+  `assets/sfx/` for the whole video (or plays no SFX at all if that folder is
+  empty).
+
 ## Anti-flagging / "doesn't look like a spam bot" features
 
 - Rotating narrator persona (name, tone, signoff) and rotating visual style,
@@ -156,11 +181,14 @@ src/
   image_gen.py
   voice_gen.py
   audio_mixer.py
+  freesound_sfx.py         # CC0 SFX search/download, used when sfx_source: "freesound"
   video_assembler.py
   drive_uploader.py
   youtube_uploader.py
   pipeline.py
-assets/{music,sfx}/         # you supply these
-state/history.json          # rotation cursors + recent premises, committed by CI
+assets/music/                    # you supply at least one track
+assets/sfx/                      # only used if sfx_source: "user_supplied"
+state/history.json               # rotation cursors + recent premises, committed by CI
+state/sfx_cache/                 # downloaded Freesound clips, gitignored, regenerable
 .github/workflows/publish.yml
 ```

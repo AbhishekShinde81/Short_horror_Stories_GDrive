@@ -74,6 +74,16 @@ audio_mixer:
   musicgen:
     model: "facebook/musicgen-small"
     prompt: "dark ambient horror drone, slow unsettling pads, distant strings, no drums, no vocals"
+  sfx_source: "freesound"           # "user_supplied" | "freesound"
+  # "freesound": one CC0-licensed one-shot per scene, auto-searched via
+  #   Freesound.org's free API using the "sfx_keyword" director_agent writes
+  #   for each scene, timed to that scene's start. CC0 has no attribution
+  #   requirement and no commercial-use ambiguity (unlike the MusicGen path
+  #   above). Requires a free FREESOUND_API_KEY env var -- see
+  #   https://freesound.org/apiv2/apply/. A scene whose keyword has no CC0
+  #   match is skipped (logged), not a hard failure.
+  # "user_supplied": picks one random track from assets/sfx/ for the whole video
+  #   (or no SFX at all if that folder is empty) -- the original behavior.
 
 video_assembler:
   width: 1080

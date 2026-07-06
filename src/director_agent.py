@@ -27,6 +27,11 @@ narrated vertical video (YouTube Shorts). Requirements:
   visual, in this rendering style: "{visual_style}". Image prompts must not
   contain any text/words to render, and must not depict real identifiable
   people.
+- Also give each scene a "sfx_keyword": a literal, concrete 1-4 word phrase
+  naming that scene's key sound SOURCE (e.g. "door creak", "footsteps on
+  gravel", "distant thunder", "clock ticking", "static", "heartbeat"). This is
+  used to search a sound-effects library by keyword, so name the physical
+  sound, not a mood or adjective.
 - The story must have a clear hook in the first scene and a twist or gut-punch
   in the final scene.
 - Do NOT reuse these previously-used premises or twists (write something
@@ -45,7 +50,7 @@ exact schema:
   "title": "string, under 60 chars",
   "premise_summary": "string, under 20 words",
   "scenes": [
-    {{"narration": "string", "image_prompt": "string"}}
+    {{"narration": "string", "image_prompt": "string", "sfx_keyword": "string, 1-4 words, literal sound source"}}
   ],
   "pinned_comment_draft": "string"
 }}

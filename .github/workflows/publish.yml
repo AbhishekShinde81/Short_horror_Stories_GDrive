@@ -45,6 +45,9 @@ jobs:
           # Only used if audio_mixer.music_source is set to the experimental,
           # non-commercial "musicgen_experimental_nc" option — see config.yaml.
           HF_API_TOKEN: ${{ secrets.HF_API_TOKEN }}
+          # Only used if audio_mixer.sfx_source is "freesound" (the default) —
+          # see config.yaml.
+          FREESOUND_API_KEY: ${{ secrets.FREESOUND_API_KEY }}
 
       - name: Commit updated history
         if: always()

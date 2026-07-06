@@ -1,13 +1,22 @@
-"""Mixes narration + a music bed + optional SFX into one master audio track,
-with the music sidechain-ducked under the narration via ffmpeg.
+"""Mixes narration + a music bed + optional per-scene SFX into one master
+audio track, with the music sidechain-ducked under the narration via ffmpeg.
 
-Music/SFX are licensed assets the user supplies locally (assets/music/,
-assets/sfx/) — nothing here downloads audio. A missing music bed is a hard
-failure, not a silent skip, since a ducked music bed is part of the spec.
+Music is a licensed asset the user supplies locally (assets/music/) — nothing
+here downloads it. A missing music bed is a hard failure, not a silent skip,
+since a ducked music bed is part of the spec.
+
+SFX defaults to sourcing one CC0-licensed one-shot per scene from Freesound
+(see freesound_sfx.py), timed to that scene's start_sec, using the
+"sfx_keyword" director_agent wrote for each scene. A failed lookup for one
+scene's keyword is skipped rather than failing the whole run — SFX is a
+nice-to-have, matching the old behavior where a missing assets/sfx/ directory
+silently meant no SFX at all. Set audio_mixer.sfx_source to "user_supplied"
+to fall back to a single random track from assets/sfx/ instead.
 """
 
 from __future__ import annotations
 
+import os
 import random
 import subprocess
 from pathlib import Path
@@ -15,6 +24,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MUSIC_DIR = REPO_ROOT / "assets" / "music"
 SFX_DIR = REPO_ROOT / "assets" / "sfx"
+SFX_CACHE_DIR = REPO_ROOT / "state" / "sfx_cache"
 
 AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg"}
 
@@ -28,6 +38,40 @@ def _run_ffmpeg(args: list[str]) -> None:
     result = subprocess.run(["ffmpeg", "-y", *args], capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(f"audio_mixer: ffmpeg failed:\n{result.stderr}")
+
+
+def _collect_sfx_cues(sfx_source: str, story: dict) -> list[tuple[float, Path]]:
+    """Returns (start_sec, clip_path) pairs to overlay on the mix."""
+    if sfx_source == "user_supplied":
+        single = _pick_random_asset(SFX_DIR)
+        return [(0.0, single)] if single is not None else []
+
+    if sfx_source != "freesound":
+        raise ValueError(
+            f"audio_mixer: unknown audio_mixer.sfx_source {sfx_source!r} "
+            "(expected 'user_supplied' or 'freesound')"
+        )
+
+    if not os.environ.get("FREESOUND_API_KEY"):
+        raise RuntimeError(
+            "audio_mixer: FREESOUND_API_KEY is not set but audio_mixer.sfx_source "
+            "is 'freesound'. Get a free key at https://freesound.org/apiv2/apply/."
+        )
+
+    import freesound_sfx
+
+    cues: list[tuple[float, Path]] = []
+    for scene in story["scenes"]:
+        keyword = scene.get("sfx_keyword")
+        if not keyword:
+            continue
+        try:
+            clip_path = freesound_sfx.fetch(keyword, SFX_CACHE_DIR)
+        except RuntimeError as exc:
+            print(f"audio_mixer: WARNING skipping SFX for {keyword!r}: {exc}")
+            continue
+        cues.append((scene["start_sec"], clip_path))
+    return cues
 
 
 def run(config: dict, story: dict, output_dir: Path) -> dict:
@@ -60,7 +104,9 @@ def run(config: dict, story: dict, output_dir: Path) -> dict:
             f"audio_mixer: unknown audio_mixer.music_source {music_source!r} "
             "(expected 'user_supplied' or 'musicgen_experimental_nc')"
         )
-    sfx_path = _pick_random_asset(SFX_DIR)
+
+    sfx_source = mixer_cfg.get("sfx_source", "user_supplied")
+    sfx_cues = _collect_sfx_cues(sfx_source, story)
 
     mixed_path = output_dir / "audio" / "mixed.mp3"
     mixed_path.parent.mkdir(parents=True, exist_ok=True)
@@ -69,8 +115,8 @@ def run(config: dict, story: dict, output_dir: Path) -> dict:
         "-i", str(narration_path),
         "-stream_loop", "-1", "-i", str(music_path),
     ]
-    if sfx_path is not None:
-        inputs += ["-i", str(sfx_path)]
+    for _, clip_path in sfx_cues:
+        inputs += ["-i", str(clip_path)]
 
     filter_parts = [
         f"[1:a]volume={mixer_cfg['music_volume_db']}dB[music_pre]",
@@ -81,9 +127,20 @@ def run(config: dict, story: dict, output_dir: Path) -> dict:
         "[0:a][music_ducked]amix=inputs=2:duration=first:weights=1 1:normalize=0[mix1]",
     ]
     final_label = "mix1"
-    if sfx_path is not None:
-        filter_parts.append(f"[2:a]volume={mixer_cfg['sfx_volume_db']}dB[sfx_pre]")
-        filter_parts.append("[mix1][sfx_pre]amix=inputs=2:duration=first:normalize=0[mix2]")
+    if sfx_cues:
+        sfx_labels = []
+        for index, (start_sec, _) in enumerate(sfx_cues):
+            input_index = 2 + index
+            delay_ms = max(round(start_sec * 1000), 0)
+            label = f"sfx{index}"
+            filter_parts.append(
+                f"[{input_index}:a]adelay=delays={delay_ms}:all=1,"
+                f"volume={mixer_cfg['sfx_volume_db']}dB[{label}]"
+            )
+            sfx_labels.append(f"[{label}]")
+        filter_parts.append(
+            f"[mix1]{''.join(sfx_labels)}amix=inputs={len(sfx_cues) + 1}:duration=first:normalize=0[mix2]"
+        )
         final_label = "mix2"
 
     fade_start = max(duration - mixer_cfg["fade_out_sec"], 0)
