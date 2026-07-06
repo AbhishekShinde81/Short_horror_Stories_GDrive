@@ -62,15 +62,15 @@ audio_mixer:
   sfx_volume_db: -14
   duck_db: -18                      # how much music ducks while narration plays
   fade_out_sec: 2.0
-  music_source: "musicgen_experimental_nc"     # "user_supplied" | "musicgen_experimental_nc"
+  music_source: "user_supplied"     # "user_supplied" | "musicgen_experimental_nc"
   # "user_supplied": picks a random track from assets/music/ (clean, verifiable
   #   commercial license — required for the "drive"/"youtube" review-and-publish path).
-  # "musicgen_experimental_nc": generates a clip via Hugging Face's free
-  #   Inference API (facebook/musicgen-small). MusicGen's model weights are
-  #   CC-BY-NC 4.0 (NON-COMMERCIAL) and that restriction covers the generated
-  #   audio itself. Personal/offline preview use ONLY — never enable this for
-  #   a monetized or public channel. Requires HF_API_TOKEN env var (free
-  #   account at huggingface.co/settings/tokens).
+  # "musicgen_experimental_nc": as of 2026-07, Hugging Face's free Inference API no
+  #   longer serves ANY text-to-audio model (confirmed: zero inference providers
+  #   configured for facebook/musicgen-small or similar) -- this option is currently
+  #   non-functional regardless of HF_API_TOKEN. Even when it worked, MusicGen's
+  #   weights are CC-BY-NC 4.0 (NON-COMMERCIAL), so it was personal/offline preview
+  #   only and never suitable for a monetized or public channel.
   musicgen:
     model: "facebook/musicgen-small"
     prompt: "dark ambient horror drone, slow unsettling pads, distant strings, no drums, no vocals"

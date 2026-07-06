@@ -101,16 +101,20 @@ run:
 - **`"user_supplied"` (default)** — picks a random track from `assets/music/`.
   This is the only option with a clean, verifiable commercial license, and is
   required for anything you intend to publish to a real/monetized channel.
-- **`"musicgen_experimental_nc"`** — generates a clip via Hugging Face's free
-  Inference API (`facebook/musicgen-small`), using the prompt in
-  `audio_mixer.musicgen.prompt`. **Meta's MusicGen model weights are licensed
-  CC-BY-NC 4.0 (non-commercial), and that restriction covers the generated
-  audio itself, not just the code.** This option exists purely so you can
-  preview the pipeline end-to-end without sourcing a track first — do not
-  enable it for a channel you intend to monetize or publish publicly at scale.
-  Requires a free Hugging Face account + access token
-  ([huggingface.co/settings/tokens](https://huggingface.co/settings/tokens))
-  set as `HF_API_TOKEN` (env var locally, GitHub secret in CI).
+- **`"musicgen_experimental_nc"`** — **currently non-functional as of 2026-07.**
+  This was meant to generate a clip via Hugging Face's free Inference API
+  (`facebook/musicgen-small`), but HF's Inference Providers ecosystem no
+  longer serves any text-to-audio model at all (confirmed: zero providers
+  configured for MusicGen or Stable Audio Open) — this fails immediately
+  regardless of `HF_API_TOKEN`. Even when it worked, Meta's MusicGen weights
+  are CC-BY-NC 4.0 (non-commercial), so it was personal/offline preview only,
+  never suitable for a monetized or public channel. Kept in the code in case
+  HF adds a provider back; the code path is otherwise dead weight for now.
+  (Also investigated: Pollinations.ai's `elevenmusic` audio endpoint — this
+  one works, but costs ~$0.40/generation with no free tier, and its
+  commercial-use terms are unresolved even for paid use — see
+  [pollinations/pollinations#8741](https://github.com/pollinations/pollinations/issues/8741),
+  an open licensing question with no response. Not wired in for either reason.)
 
 ## Anti-flagging / "doesn't look like a spam bot" features
 
