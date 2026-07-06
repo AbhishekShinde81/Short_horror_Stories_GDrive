@@ -57,12 +57,12 @@ def _make_output_dir() -> Path:
     return output_dir
 
 
-def _upload(config: dict, video_path: Path, story: dict) -> None:
+def _upload(config: dict, video_path: Path, story: dict, output_dir: Path) -> None:
     destination = config["run"]["destination"]
     if destination == "drive":
         import drive_uploader
 
-        drive_uploader.run(config, video_path, story)
+        drive_uploader.run(config, video_path, story, output_dir)
     elif destination == "youtube":
         import youtube_uploader
 
@@ -96,7 +96,7 @@ def main() -> None:
     story_path = output_dir / "story.json"
     story_path.write_text(json.dumps(story, indent=2), encoding="utf-8")
 
-    _upload(config, video_path, story)
+    _upload(config, video_path, story, output_dir)
 
     _save_history(history)
     print("pipeline: done.")
