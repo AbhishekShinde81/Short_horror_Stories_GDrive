@@ -7,8 +7,8 @@ drive_token.json
 # Local working/output directory
 output/
 
-# Downloaded SFX cache (freesound_sfx.py) -- regenerable, not source
-state/sfx_cache/
+# Downloaded Freesound cache (freesound_client.py) -- regenerable, not source
+state/freesound_cache/
 
 # Python
 __pycache__/

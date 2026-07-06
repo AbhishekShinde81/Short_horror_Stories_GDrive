@@ -35,7 +35,7 @@ Do these in order.
 | 9 | ffmpeg | Yes | installed on the GitHub Actions runner via `apt`; install locally too for local testing |
 | 10 | Pollinations.ai (image gen) | Yes, no key needed | called directly, no signup |
 | 11 | edge-tts (voice gen) | Yes, no key needed | Python package, uses Microsoft Edge's TTS endpoint |
-| 12 | `FREESOUND_API_KEY` (SFX gen, default) | Yes, free forever | [freesound.org/apiv2/apply](https://freesound.org/apiv2/apply/) — needs a free Freesound account first |
+| 12 | `FREESOUND_API_KEY` (music + SFX sourcing, default for both) | Yes, free forever | [freesound.org/apiv2/apply](https://freesound.org/apiv2/apply/) — needs a free Freesound account first |
 
 > **Anthropic billing note:** `ANTHROPIC_API_KEY` usage is billed separately
 > through the Anthropic API/Console. A Claude.ai / Claude Pro subscription
@@ -59,11 +59,10 @@ Do these in order.
    python src/youtube_uploader.py --authorize   # -> token.json
    ```
    Each opens a browser consent screen and writes a token file to the repo root.
-5. **Add at least one royalty-free track** to `assets/music/` — the pipeline
-   picks one per run, and this is not downloaded or generated for you (see
-   "Music" below for why). SFX defaults to auto-sourcing from Freesound
-   instead (see "SFX" below), so `assets/sfx/` is only needed if you set
-   `audio_mixer.sfx_source: "user_supplied"`.
+5. **Nothing to add to `assets/music/` or `assets/sfx/` by default** — both
+   music and SFX auto-source from Freesound (see "Music" and "SFX" below).
+   Those folders only matter if you switch either `audio_mixer.music_source`
+   or `.sfx_source` to `"user_supplied"`.
 6. **Set `drive.folder_id`** in `config.yaml` to the target Drive folder's ID (from its URL).
 7. **Create a new GitHub repo**, push this code, and add the repo secrets listed in row 8 of the table above — paste the full contents of `token.json` / `drive_token.json` as the secret values.
 8. The workflow in `.github/workflows/publish.yml` runs once/day and on manual dispatch (`workflow_dispatch`).
@@ -73,7 +72,7 @@ Do these in order.
 ```
 pip install -r requirements.txt
 export GEMINI_API_KEY=...          # or set ANTHROPIC_API_KEY if using that provider
-export FREESOUND_API_KEY=...       # only if audio_mixer.sfx_source is "freesound" (default)
+export FREESOUND_API_KEY=...       # default source for both music and SFX
 python src/pipeline.py
 ```
 
@@ -100,46 +99,58 @@ run:
   publish_mode: "review"   # "review" = unlisted, "public" = public
 ```
 
-## Music: user-supplied vs. AI-generated (experimental, non-commercial)
+## Music & SFX: why Freesound instead of AI generation
 
-`config.yaml -> audio_mixer.music_source` has two options:
+There is no working free AI audio-generation path as of 2026-07. Every
+serious free text-to-audio option was checked and is a dead end:
 
-- **`"user_supplied"` (default)** — picks a random track from `assets/music/`.
-  This is the only option with a clean, verifiable commercial license, and is
-  required for anything you intend to publish to a real/monetized channel.
-- **`"musicgen_experimental_nc"`** — **currently non-functional as of 2026-07.**
-  This was meant to generate a clip via Hugging Face's free Inference API
-  (`facebook/musicgen-small`), but HF's Inference Providers ecosystem no
-  longer serves any text-to-audio model at all (confirmed: zero providers
-  configured for MusicGen or Stable Audio Open) — this fails immediately
-  regardless of `HF_API_TOKEN`. Even when it worked, Meta's MusicGen weights
-  are CC-BY-NC 4.0 (non-commercial), so it was personal/offline preview only,
-  never suitable for a monetized or public channel. Kept in the code in case
-  HF adds a provider back; the code path is otherwise dead weight for now.
-  (Also investigated: Pollinations.ai's `elevenmusic` audio endpoint — this
-  one works, but costs ~$0.40/generation with no free tier, and its
-  commercial-use terms are unresolved even for paid use — see
+- **Hugging Face Inference API** (`facebook/musicgen-small/medium/large`,
+  `musicgen-melody`, `stabilityai/stable-audio-open-1.0`/`-small`,
+  `declare-lab/tango2`) — confirmed live via HF's own model API
+  (`inferenceProviderMapping` is `{}` for every one of them): zero providers,
+  including HF's own `hf-inference`, currently serve any of these models.
+  This fails immediately regardless of `HF_API_TOKEN`. Even when this path
+  worked, MusicGen's weights are CC-BY-NC 4.0 (non-commercial), so it was
+  personal/offline preview only, never suitable for a monetized or public
+  channel.
+- **Pollinations.ai's `elevenmusic`** — works, but costs ~$0.40/generation
+  with no free tier, and its commercial-use terms are unresolved even for
+  paid use — see
   [pollinations/pollinations#8741](https://github.com/pollinations/pollinations/issues/8741),
-  an open licensing question with no response. Not wired in for either reason.)
+  an open licensing question with no response.
 
-## SFX: Freesound-sourced (default) vs. user-supplied
+**The actual fix: [Freesound.org](https://freesound.org)'s free API isn't
+just short SFX — its CC0 ("Creative Commons 0") catalog also includes full
+ambient tracks and loops.** CC0 has no attribution requirement and no
+commercial-use ambiguity, so this is safe for a monetized/public channel,
+unlike every AI-generation option above. `freesound_client.py` is the shared
+module both of the below use — same API key, same license guarantee, nothing
+to manually source or keep in the repo.
 
-`config.yaml -> audio_mixer.sfx_source` has two options:
+`config.yaml -> audio_mixer.music_source` (default `"freesound"`):
+- **`"freesound"`** — `director_agent` rotates through
+  `audio_mixer.freesound_music_keywords` once per run (round-robin, same
+  pattern as persona/visual-style rotation), searches for a CC0 track
+  15-180s long sorted by rating, downloads it, and loops it under the
+  narration (ffmpeg `-stream_loop`). Cached in `state/freesound_cache/music/`
+  by keyword. A missing/failed match is a **hard failure** (matching
+  `user_supplied`'s original behavior) since a music bed is part of the spec.
+- **`"user_supplied"`** — picks a random track from `assets/music/` instead —
+  useful if you'd rather curate your own tracks.
+- **`"musicgen_experimental_nc"`** — kept in the code in case HF adds a
+  provider back; currently dead weight, see above.
 
-- **`"freesound"` (default)** — `director_agent` writes a short, literal
-  `sfx_keyword` per scene (e.g. "door creak", "distant thunder"), and
-  `freesound_sfx.py` searches [Freesound.org](https://freesound.org)'s free
-  API for a **CC0-licensed** ("Creative Commons 0") match, downloads it, and
-  overlays it at that scene's start time. CC0 has no attribution requirement
-  and no commercial-use ambiguity — unlike the CC-BY-NC dead end investigated
-  for music above — so this is safe for a monetized/public channel. Results
-  are cached in `state/sfx_cache/` by keyword so repeat keywords don't re-hit
-  the API. A scene whose keyword returns no CC0 match is skipped (logged as a
-  warning), not a hard failure. Requires a free `FREESOUND_API_KEY` (see
-  setup table above).
-- **`"user_supplied"`** — the original behavior: picks one random track from
-  `assets/sfx/` for the whole video (or plays no SFX at all if that folder is
-  empty).
+`config.yaml -> audio_mixer.sfx_source` (default `"freesound"`):
+- **`"freesound"`** — `director_agent` writes a short, literal `sfx_keyword`
+  per scene (e.g. "door creak", "distant thunder"), searched for a CC0
+  one-shot (under 12s) and overlaid at that scene's start time. Cached in
+  `state/freesound_cache/sfx/` by keyword. A scene whose keyword returns no
+  CC0 match is skipped (logged as a warning), not a hard failure — SFX is a
+  nice-to-have.
+- **`"user_supplied"`** — picks one random track from `assets/sfx/` for the
+  whole video (or plays no SFX at all if that folder is empty).
+
+Both require a free `FREESOUND_API_KEY` (see setup table above).
 
 ## Anti-flagging / "doesn't look like a spam bot" features
 
@@ -181,14 +192,15 @@ src/
   image_gen.py
   voice_gen.py
   audio_mixer.py
-  freesound_sfx.py         # CC0 SFX search/download, used when sfx_source: "freesound"
+  freesound_client.py      # CC0 music/SFX search+download, used by default for both
+  music_gen.py             # dead (non-commercial + no HF provider) MusicGen path, kept opt-in
   video_assembler.py
   drive_uploader.py
   youtube_uploader.py
   pipeline.py
-assets/music/                    # you supply at least one track
+assets/music/                    # only used if music_source: "user_supplied"
 assets/sfx/                      # only used if sfx_source: "user_supplied"
 state/history.json               # rotation cursors + recent premises, committed by CI
-state/sfx_cache/                 # downloaded Freesound clips, gitignored, regenerable
+state/freesound_cache/{music,sfx}/  # downloaded Freesound clips, gitignored, regenerable
 .github/workflows/publish.yml
 ```

@@ -1,17 +1,22 @@
 """Mixes narration + a music bed + optional per-scene SFX into one master
 audio track, with the music sidechain-ducked under the narration via ffmpeg.
 
-Music is a licensed asset the user supplies locally (assets/music/) — nothing
-here downloads it. A missing music bed is a hard failure, not a silent skip,
-since a ducked music bed is part of the spec.
+Both the music bed and SFX default to auto-sourcing from Freesound (see
+freesound_client.py) rather than requiring locally-supplied files — there is
+no working free AI audio-generation path (see music_gen.py's docstring), but
+Freesound's CC0-licensed catalog covers the same need legally and for free:
 
-SFX defaults to sourcing one CC0-licensed one-shot per scene from Freesound
-(see freesound_sfx.py), timed to that scene's start_sec, using the
-"sfx_keyword" director_agent wrote for each scene. A failed lookup for one
-scene's keyword is skipped rather than failing the whole run — SFX is a
-nice-to-have, matching the old behavior where a missing assets/sfx/ directory
-silently meant no SFX at all. Set audio_mixer.sfx_source to "user_supplied"
-to fall back to a single random track from assets/sfx/ instead.
+- SFX: one CC0 one-shot per scene, timed to that scene's start_sec, using
+  the "sfx_keyword" director_agent wrote for each scene. A failed lookup for
+  one scene's keyword is skipped rather than failing the whole run — SFX is
+  a nice-to-have, matching the old behavior where a missing assets/sfx/
+  directory silently meant no SFX at all. Set audio_mixer.sfx_source to
+  "user_supplied" to fall back to a single random track from assets/sfx/.
+- Music: one CC0 ambient track using the "music_keyword" director_agent
+  rotates per run, looped under the narration. A missing music bed is a hard
+  failure, not a silent skip (matching user_supplied's existing behavior),
+  since a ducked music bed is part of the spec. Set audio_mixer.music_source
+  to "user_supplied" to fall back to a random track from assets/music/.
 """
 
 from __future__ import annotations
@@ -24,7 +29,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MUSIC_DIR = REPO_ROOT / "assets" / "music"
 SFX_DIR = REPO_ROOT / "assets" / "sfx"
-SFX_CACHE_DIR = REPO_ROOT / "state" / "sfx_cache"
+FREESOUND_CACHE_ROOT = REPO_ROOT / "state" / "freesound_cache"
+SFX_CACHE_DIR = FREESOUND_CACHE_ROOT / "sfx"
+MUSIC_CACHE_DIR = FREESOUND_CACHE_ROOT / "music"
 
 AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg"}
 
@@ -58,7 +65,7 @@ def _collect_sfx_cues(sfx_source: str, story: dict) -> list[tuple[float, Path]]:
             "is 'freesound'. Get a free key at https://freesound.org/apiv2/apply/."
         )
 
-    import freesound_sfx
+    import freesound_client
 
     cues: list[tuple[float, Path]] = []
     for scene in story["scenes"]:
@@ -66,7 +73,7 @@ def _collect_sfx_cues(sfx_source: str, story: dict) -> list[tuple[float, Path]]:
         if not keyword:
             continue
         try:
-            clip_path = freesound_sfx.fetch(keyword, SFX_CACHE_DIR)
+            clip_path = freesound_client.fetch_sfx(keyword, SFX_CACHE_DIR)
         except RuntimeError as exc:
             print(f"audio_mixer: WARNING skipping SFX for {keyword!r}: {exc}")
             continue
@@ -92,6 +99,22 @@ def run(config: dict, story: dict, output_dir: Path) -> dict:
             model=musicgen_cfg["model"],
             out_path=output_dir / "audio" / "musicgen_track.wav",
         )
+    elif music_source == "freesound":
+        if not os.environ.get("FREESOUND_API_KEY"):
+            raise RuntimeError(
+                "audio_mixer: FREESOUND_API_KEY is not set but audio_mixer.music_source "
+                "is 'freesound'. Get a free key at https://freesound.org/apiv2/apply/."
+            )
+        keyword = story.get("music_keyword")
+        if not keyword:
+            raise RuntimeError(
+                "audio_mixer: story has no 'music_keyword' but audio_mixer.music_source "
+                "is 'freesound' -- director_agent should have set this."
+            )
+
+        import freesound_client
+
+        music_path = freesound_client.fetch_music(keyword, MUSIC_CACHE_DIR)
     elif music_source == "user_supplied":
         music_path = _pick_random_asset(MUSIC_DIR)
         if music_path is None:
@@ -102,7 +125,7 @@ def run(config: dict, story: dict, output_dir: Path) -> dict:
     else:
         raise ValueError(
             f"audio_mixer: unknown audio_mixer.music_source {music_source!r} "
-            "(expected 'user_supplied' or 'musicgen_experimental_nc')"
+            "(expected 'user_supplied', 'freesound', or 'musicgen_experimental_nc')"
         )
 
     sfx_source = mixer_cfg.get("sfx_source", "user_supplied")

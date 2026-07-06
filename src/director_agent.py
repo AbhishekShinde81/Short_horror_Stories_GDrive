@@ -79,6 +79,19 @@ def _select_visual_style(config: dict, history: dict) -> str:
     return styles[next_index]
 
 
+def _select_music_keyword(config: dict, history: dict) -> str:
+    """Round-robin picks the next Freesound search keyword for the music bed
+    (only used when audio_mixer.music_source is "freesound") -- same rotation
+    pattern as persona/visual style, so consecutive runs don't always land on
+    the same cached track.
+    """
+    keywords = config["audio_mixer"]["freesound_music_keywords"]
+    last_index = history.get("last_music_keyword_index", -1)
+    next_index = (last_index + 1) % len(keywords)
+    history["last_music_keyword_index"] = next_index
+    return keywords[next_index]
+
+
 def _history_block(history: dict, window: int) -> str:
     premises = history.get("premises", [])[-window:]
     if not premises:
@@ -93,6 +106,7 @@ def run(config: dict, history: dict) -> dict:
     """
     persona = _select_persona(config, history)
     visual_style = _select_visual_style(config, history)
+    music_keyword = _select_music_keyword(config, history)
 
     system = SYSTEM_TEMPLATE.format(
         persona_name=persona["name"],
@@ -124,6 +138,7 @@ def run(config: dict, history: dict) -> dict:
 
     story["persona"] = persona
     story["visual_style"] = visual_style
+    story["music_keyword"] = music_keyword
     story["full_narration"] = " ".join(scene["narration"] for scene in story["scenes"])
 
     history.setdefault("premises", []).append(story["premise_summary"])
